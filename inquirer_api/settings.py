@@ -24,9 +24,9 @@ SECRET_KEY = 'v1fxrz&zjgcccu2&t)^42+tt@pslodc5dr17mlnta@=o5^&cq@'
 
 # SECURITY WARNING: don't run with debug turned on in production!
 
-DEBUG = False
+DEBUG = True
 
-POSTGRESQL_DB = True
+POSTGRESQL_DB = False
 
 ALLOWED_HOSTS = ['*']
 

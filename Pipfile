@@ -6,11 +6,11 @@ verify_ssl = true
 [dev-packages]
 
 [packages]
-django = "*"
 djangorestframework = "*"
 django-filter = "*"
 psycopg2-binary = "*"
 whitenoise = "*"
+django = "==2.2.10"
 
 [requires]
 python_version = "3.8"

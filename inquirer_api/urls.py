@@ -21,11 +21,11 @@ from rest_framework.routers import DefaultRouter
 router = DefaultRouter()
 router.register(r'polls', views.PollViewSet)
 router.register(r'questions', views.QuestionViewSet)
-router.register(r'choices', views.ChoiceViewSet)
+router.register(r'answer', views.AnswerViewSet)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('auth/', include('rest_framework.urls', namespace='rest_framework')),
     path('', include(router.urls)),
-    path('answers/', views.AnswerView.as_view())
+    path('user_answers/', views.UserAnswersView.as_view())
 ]
