@@ -1,25 +1,10 @@
 from django_filters.rest_framework import DjangoFilterBackend
-from polls.models import Poll, Question, Answer, Choice
-from .serializers import PollSerializer, QuestionSerializer, AnswerSerializer, ChoiceSerializer
+from polls.models import Poll, Question, Answer
+from .serializers import PollSerializer, QuestionSerializer, AnswerSerializer
+from rest_framework import viewsets, generics
+from inquirer_api.permissions import IsAdminUserOrReadOnly, IsOwnerFilterBackend, ReadOnly
 from rest_framework.response import Response
-from rest_framework import generics, viewsets
-from inquirer_api.permissions import IsAdminUserOrReadOnly
 from django.utils import timezone
-from rest_framework import permissions
-
-
-def answers_for_poll(data, poll_id):
-    response = []
-    for result in data:
-        question = {
-            "Вопрос": result.question.text,
-            "Тип вопроса": result.question.question_type,
-            "Текстовый ответ": result.text,
-            "Варианты ответа": [choice[0] for choice in list(result.choice.values_list('title'))]
-        }
-        if poll_id == result.question.poll.id:
-            response.append(question)
-    return response
 
 
 class PollViewSet(viewsets.ModelViewSet):
@@ -33,29 +18,48 @@ class PollViewSet(viewsets.ModelViewSet):
 class QuestionViewSet(viewsets.ModelViewSet):
     queryset = Question.objects.all()
     serializer_class = QuestionSerializer
-    permission_classes = [IsAdminUserOrReadOnly]
+    permission_classes = [ReadOnly]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['poll']
 
 
-class ChoiceViewSet(viewsets.ModelViewSet):
-    queryset = Choice.objects.all()
-    serializer_class = ChoiceSerializer
-    permission_classes = [permissions.IsAdminUser]
-    filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['question', 'question__poll']
-
-
-class AnswerView(generics.GenericAPIView):
+class AnswerViewSet(viewsets.ModelViewSet):
+    queryset = Answer.objects.all()
     serializer_class = AnswerSerializer
+    filter_backends = [DjangoFilterBackend, IsOwnerFilterBackend]
+    filterset_fields = ['user', 'session_key']
 
-    def post(self, request, format=None):
-        answer = AnswerSerializer(data=request.data, context=request)
-        if answer.is_valid(raise_exception=True):
-            answer.save()
-            return Response({'result': 'OK. Ваши ответы приняты'})
+    def perform_create(self, serializer):
+        if not self.request.session.session_key:
+            self.request.session.save()
+        session_key = self.request.session.session_key
+        serializer.save(user=self.request.user, session_key=session_key)
 
+
+class UserAnswersView(generics.GenericAPIView):
     def get(self, request, format=None):
-        data = Answer.objects.filter(session_id=request.session.session_key)
-        response = {item.name: answers_for_poll(data, item.pk) for item in Poll.objects.exclude(end_date__lte=timezone.now())}
+        if str(request.user) == 'AnonymousUser':
+            data = Answer.objects.filter(session_key=request.session.session_key)
+        else:
+            data = Answer.objects.filter(user=request.user)
+        response = {f"{item.name}. Максимум очков: {item.max_points()}": answers_for_poll(data, item.pk) for item in
+                    Poll.objects.exclude(end_date__lte=timezone.now())}
         return Response(response)
+
+
+def answers_for_poll(data, poll_id):
+    response = []
+    for result in data:
+        question = {
+            "Вопрос": result.question.text,
+            "Тип вопроса": result.question.question_type,
+            "Ответ": [choice[0] for choice in list(result.multiple_choice.values_list('title'))],
+        }
+        if result.question.question_type == 'single':
+            question.update({"Варианты ответа": result.single_choice.title})
+        if result.question.question_type == 'text':
+            question.update({"Текстовый ответ": result.text})
+        if poll_id == result.question.poll.id:
+            question.update({"Получено очков": result.earned_points()})
+            response.append(question)
+    return response
